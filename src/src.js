@@ -154,173 +154,13 @@
         return A;
     })();
 
-    var Pulse = (function () {
-        function P(options) {
-            this.x = options.x;
-            this.y = options.y;
-            this.maxRadius = options.radius;
-            this.color = options.color;
-            this.shadowBlur = 5;
-            this.lineWidth = options.borderWidth;
-            this.r = 0;
-            this.factor = 2 / options.radius;
-        };
-
-        P.prototype.draw = function (context) {
-            // var vr = (this.maxRadius - this.r) * this.factor;
-            var vr = 0.5;
-            this.r += vr;
-            // this.shadowBlur = Math.floor(this.r);
-
-            context.save();
-            context.translate(this.x, this.y);
-            var strokeColor = this.color;
-            strokeColor = utils.calculateColor(strokeColor, 1 - this.r / this.maxRadius);
-            context.strokeStyle = strokeColor;
-            context.shadowBlur = this.shadowBlur;
-            context.shadowColor = strokeColor;
-            context.lineWidth = this.lineWidth;
-            context.beginPath();
-            context.arc(0, 0, this.r, 0, Math.PI * 2, false);
-            context.stroke();
-            context.restore();
-
-            if (Math.abs(this.maxRadius - this.r) < 0.8) {
-                this.r = 0;
-            }
-        }
-
-        return P;
-    })();
-
-    var Spark = (function () {
-        var S = function (options) {
-            var startX = options.startX,
-                startY = options.startY,
-                endX = options.endX,
-                endY = options.endY;
-
-            //两点之间的圆有多个，通过两点及半径便可以定出两个圆，根据需要选取其中一个圆
-            var L = Math.sqrt(Math.pow(startX - endX, 2) + Math.pow(startY - endY, 2));
-            var m = (startX + endX) / 2; // 横轴中点
-            var n = (startY + endY) / 2; // 纵轴中点
-            var factor = 1.5;
-
-            var centerX = (startY - endY) * factor + m;
-            var centerY = (endX - startX) * factor + n;
-
-            var radius = Math.sqrt(Math.pow(L / 2, 2) + Math.pow(L * factor, 2));
-            var startAngle = Math.atan2(startY - centerY, startX - centerX);
-            var endAngle = Math.atan2(endY - centerY, endX - centerX);
-
-            // 保证Spark的弧度不超过Math.PI
-            if (startAngle * endAngle < 0) {
-                if (startAngle < 0) {
-                    startAngle += Math.PI * 2;
-                    endAngle += Math.PI * 2;
-                } else {
-                    endAngle += Math.PI * 2;
-                }
-            }
-
-            this.tailPointsCount = 50; // 拖尾点数
-            this.centerX = centerX;
-            this.centerY = centerY;
-            this.startAngle = startAngle;
-            this.endAngle = endAngle;
-            this.radius = radius;
-            this.lineWidth = options.width || 1;
-            this.strokeStyle = options.color || '#fff';
-            this.factor = 2 / this.radius;
-            this.deltaAngle = (80 / Math.min(this.radius, 400)) / this.tailPointsCount;
-            this.trailAngle = this.startAngle;
-            this.arcAngle = this.startAngle;
-
-            this.animateBlur = true;
-
-            const size = options.size? options.size/2:1
-            this.marker = new Marker({
-                x: 50,
-                y: 80,
-                rotation: 50 * Math.PI / 180,
-                style: 'arrow',
-                color: 'rgb(255, 255, 255)',
-                size: size+1,
-                borderWidth: size ,
-                borderColor: this.strokeStyle
-            });
-        };
-
-        S.prototype.drawArc = function (context, strokeColor, lineWidth, startAngle, endAngle) {
-            context.save();
-            context.lineWidth = lineWidth;
-            // context.lineWidth = 5;
-            context.strokeStyle = strokeColor;
-            context.shadowColor = this.strokeStyle;
-            // context.shadowBlur = 5;
-            context.lineCap = "round";
-            context.beginPath();
-            context.arc(this.centerX, this.centerY, this.radius, startAngle, endAngle, false);
-            context.stroke();
-            context.restore();
-        };
-
-        S.prototype.draw = function (context) {
-            var endAngle = this.endAngle;
-            // 匀速
-            var angle = this.trailAngle + this.factor;
-            var strokeColor = this.strokeStyle;
-            if (this.animateBlur) {
-                this.arcAngle = angle;
-            }
-            this.trailAngle = angle;
-            strokeColor = utils.calculateColor(strokeColor, 0.1);
-
-            this.drawArc(context, strokeColor, this.lineWidth, this.startAngle, this.arcAngle);
-
-            // 拖尾效果
-            var count = this.tailPointsCount;
-            for (var i = 0; i < count; i++) {
-                var arcColor = utils.calculateColor(this.strokeStyle, 0.3 - 0.3 / count * i);
-                var tailLineWidth = 5;
-                if (this.trailAngle - this.deltaAngle * i > this.startAngle) {
-                    this.drawArc(context, arcColor,
-                        tailLineWidth - tailLineWidth / count * i,
-                        this.trailAngle - this.deltaAngle * i,
-                        this.trailAngle
-                    );
-                }
-            }
-
-            context.save();
-            context.translate(this.centerX, this.centerY);
-            this.marker.x = Math.cos(this.trailAngle) * this.radius;
-            this.marker.y = Math.sin(this.trailAngle) * this.radius;
-            this.marker.rotation = this.trailAngle + Math.PI / 2;
-            this.marker.draw(context);
-            context.restore();
-
-            if ((endAngle - this.trailAngle) * 180 / Math.PI < 0.5) {
-                this.trailAngle = this.startAngle;
-                this.animateBlur = false;
-            }
-        };
-
-        return S;
-    })();
-
-
     var Migration = (function () {
         var M = function (options) {
             this.data = options.data;
             this.store = {
                 arcs: [],
                 markers: [],
-                pulses: [],
-                sparks: []
             };
-            this.playAnimation = true;
-            this.started = false;
             this.context = options.context;
             this.style = options.style;
             this.init();
@@ -329,9 +169,6 @@
         M.prototype.init = function () {
             this.updateData(this.data);
         };
-        /*
-         * Shape 必须拥有draw方法
-        */
         M.prototype.add = function (Shape) {
 
         };
@@ -342,18 +179,8 @@
             this.store = {
                 arcs: [],
                 markers: [],
-                pulses: [],
-                sparks: []
             };
-            // 更新状态
-            this.playAnimation = true;
-            this.started = false;
-            // 清除绘画实例，如果没有这个方法，多次调用start，相当于存在多个动画队列同时进行
-            window.cancelAnimationFrame(this.requestAnimationId);
         };
-        /*
-         * 更新数据
-        */
         M.prototype.updateData = function (data) {
             if (!data || data.length === 0) {
                 return;
@@ -383,27 +210,9 @@
                         borderWidth: 0,
                         borderColor: element.color
                     });
-                    var pulse = new Pulse({
-                        x: element.to[0],
-                        y: element.to[1],
-                        radius: this.style.pulse.radius,
-                        color: element.color,
-                        borderWidth: this.style.pulse.borderWidth
-                    });
-                    var spark = new Spark({
-                        startX: element.from[0],
-                        startY: element.from[1],
-                        endX: element.to[0],
-                        endY: element.to[1],
-                        width: 15,
-                        color: element.color,
-                        size: element.arcWidth
-                    });
 
                     this.store.arcs.push(arc);
                     this.store.markers.push(marker);
-                    this.store.pulses.push(pulse);
-                    this.store.sparks.push(spark);
                 }, this);
             }
         };
@@ -411,29 +220,12 @@
         */
         M.prototype.start = function (canvas) {
             var that = this;
-            if (!this.started) {
-                (function drawFrame() {
-                    that.requestAnimationId = window.requestAnimationFrame(drawFrame, canvas);
-
-                    if (that.playAnimation) {
-                        canvas.width += 1;
-                        canvas.width -= 1;
-                        for (var p in that.store) {
-                            var shapes = that.store[p];
-                            for (var i = 0, len = shapes.length; i < len; i++) {
-                                shapes[i].draw(that.context);
-                            }
-                        }
-                    }
-                })();
-                this.started = true;
+            for (var p in that.store) {
+                var shapes = that.store[p];
+                for (var i = 0, len = shapes.length; i < len; i++) {
+                    shapes[i].draw(that.context);
+                }
             }
-        };
-        M.prototype.play = function () {
-            this.playAnimation = true;
-        };
-        M.prototype.pause = function () {
-            this.playAnimation = false;
         };
         return M;
     })();
@@ -442,13 +234,10 @@
         options: {
             map: {},
             data: {},
-            pulseRadius: 25,
-            pulseBorderWidth: 3,
             arcWidth: 1,
             arcLabel: true,
             arcLabelFont: '15px sans-serif',
             Marker: {},
-            Spark: {}
 
         },
         _setOptions: function (obj, options) {
@@ -465,10 +254,6 @@
             this._map = this.options.map || {};
             this._data = this.options.data || {};
             this._style = {
-                pulse: {
-                    radius: this.options.pulseRadius,
-                    borderWidth: this.options.pulseBorderWidth
-                },
                 arc: {
                     width: this.options.arcWidth,
                     label: this.options.arcLabel,
@@ -556,7 +341,7 @@
                     return {
                         from: [fromPixel.x, fromPixel.y],
                         to: [toPixel.x, toPixel.y],
-                        labels: d.labels,
+                        labels: [d.fromLabel, d.toLabel],
                         value: d.value,
                         color: d.color,
                         arcWidth: d.value? parseInt((d.value - minValue) * (maxWidth-1)/(maxValue - minValue)) + 1:this.options.arcWidth
@@ -578,7 +363,6 @@
             //     that.migration.pause();
             // });
             this._map.on('moveend', function () {
-                that.migration.play();
                 that._draw();
             });
             this._map.on('zoomstart ', function () { that.container.style.display = 'none' });
@@ -591,7 +375,7 @@
         },
         _draw: function () {
             var bounds = this._map.getBounds();
-            if (bounds && this.migration.playAnimation) {
+            if (bounds) {
                 this._resize();
                 this._transform();
                 var data = this._convertData();
@@ -607,7 +391,7 @@
         addTo: function () {
             this._bindMapEvents();
             var bounds = this._map.getBounds();
-            if (bounds && this.migration.playAnimation) {
+            if (bounds) {
                 this._resize();
                 this._transform();
 
@@ -627,12 +411,6 @@
         show: function () {
             this.container.style.display = '';
             this._show = true;
-        },
-        play: function () {
-            this.migration.play();
-        },
-        pause: function () {
-            this.migration.pause();
         },
         destroy: function () {
             this.migration.clear();
